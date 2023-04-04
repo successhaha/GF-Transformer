@@ -18,8 +18,11 @@ we use the segformer as the backbone(mit_b3.pth).
 downloda pretrained model:<https://drive.google.com/drive/folders/1GAku0G0iR9DsBxCbfENWMJ27c5lYUeQA>
 
 stage one:
+CUDA_VISIBLE_DEVICES=0,1 python train_segformer.py
+python predict_transforer_loc.py
 
 stage two:
+CUDA_VISIBLE_DEVICES=0,1 python train_segformer_cls.py
 
 # Data Processing Techniques
 
