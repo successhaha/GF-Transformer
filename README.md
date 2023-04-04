@@ -1,5 +1,5 @@
 # GF-Transformer
-Cross-Scale Guided Fusion Transformer for Disaster Assessment Using Satellite Imagery\
+Cross-Scale Guided Fusion Transformer for Disaster Assessment Using Satellite Imagery
 # Requirements
    Install the necessary package with:
   
