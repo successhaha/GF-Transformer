@@ -1,4 +1,4 @@
-# GF-Transformer
+# GF-Former
 Cross-Scale Guided Fusion Transformer for Disaster Assessment Using Satellite Imagery
 
 # Requirements
