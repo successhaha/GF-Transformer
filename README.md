@@ -21,8 +21,7 @@ The first stage:
 
 CUDA_VISIBLE_DEVICES=0,1 python train_segformer.py\
 python predict_transforer_loc.py\
-
-The second stage:
+The second stage:\
 CUDA_VISIBLE_DEVICES=0,1 python train_segformer_cls.py\
 
 # Data Processing Techniques
