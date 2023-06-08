@@ -14,7 +14,7 @@ Cross-Scale Guided Fusion Transformer for Disaster Assessment Using Satellite Im
 Dataset: https://www.xview2.org
 
 # Train
-we use the segformer as the backbone(mit_b3.pth).
+we use the segformer as the backbone(mit_b3.pth).\
 downloda pretrained model:<https://drive.google.com/drive/folders/1GAku0G0iR9DsBxCbfENWMJ27c5lYUeQA>
 
 stage one:
