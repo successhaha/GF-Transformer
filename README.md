@@ -14,15 +14,16 @@ Cross-Scale Guided Fusion Transformer for Disaster Assessment Using Satellite Im
 Dataset: https://www.xview2.org
 
 # Train
-we use the segformer as the backbone(mit_b3.pth).\
-downloda pretrained model:<https://drive.google.com/drive/folders/1GAku0G0iR9DsBxCbfENWMJ27c5lYUeQA>
+Model：we use the segformer as the backbone(mit_b3.pth).\
+Pretrained model: <https://drive.google.com/drive/folders/1GAku0G0iR9DsBxCbfENWMJ27c5lYUeQA>
 
-stage one:
+The first stage:
 
-CUDA_VISIBLE_DEVICES=0,1 python train_segformer.py/
-python predict_transforer_loc.py/
-stage two:
-CUDA_VISIBLE_DEVICES=0,1 python train_segformer_cls.py/
+CUDA_VISIBLE_DEVICES=0,1 python train_segformer.py\
+python predict_transforer_loc.py\
+
+The second stage:
+CUDA_VISIBLE_DEVICES=0,1 python train_segformer_cls.py\
 
 # Data Processing Techniques
 
