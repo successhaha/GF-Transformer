@@ -5,10 +5,11 @@ Cross-Scale Guided Fusion Transformer for Disaster Assessment Using Satellite Im
    Install the necessary package with:
   
   -python 3\
-  -pytorch 1.1.0+ and torchvision 0.3.0+\
-  -Nvidia apex <https://github.com/NVIDA/apex>\
+  -pytorch 1.9.0 and torchvision 0.10.0\
+  -apex <https://github.com/NVIDA/apex>\
   -opencv-python\
-  -imgaug
+  -imgaug\
+  -timm
 
 # Dataset
 Dataset: https://www.xview2.org
@@ -18,10 +19,10 @@ Model：we use the segformer as the backbone(mit_b3.pth).\
 Pretrained model: <https://drive.google.com/drive/folders/1GAku0G0iR9DsBxCbfENWMJ27c5lYUeQA>
 
 The first stage:
-
 CUDA_VISIBLE_DEVICES=0,1 python train_segformer.py\
-python predict_transforer_loc.py\
-The second stage:\
+python predict_transforer_loc.py
+
+The second stage:
 CUDA_VISIBLE_DEVICES=0,1 python train_segformer_cls.py\
 
 # Data Processing Techniques
