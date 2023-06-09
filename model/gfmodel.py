@@ -111,3 +111,37 @@ class GFformer_one(nn.Module):
         out = [r1, r2, r3, r4]
         out = self.decoder(out)
         return out
+   class Decoder_double(nn.Module):
+    def __init__(self, num_classes = 1, decoder_dim = 256):
+        super(Decoder_double, self).__init__()
+        encoder_filters = [64, 128, 320, 512]
+        decoder_filters = np.asarray([32, 64, 128, 256])
+        
+        self.conv1 = ConvRelu(encoder_filters[-1], decoder_filters[-1])                         # 512-->256
+        self.conv1_2 = ConvRelu(decoder_filters[-1] + encoder_filters[-2], decoder_filters[-1]) # 256+320-->256
+        self.conv2 = ConvRelu(decoder_filters[-1], decoder_filters[-2])                         # 256-->128
+        self.conv2_2 = ConvRelu(decoder_filters[-2] + encoder_filters[-3], decoder_filters[-2]) # 128+128-->128
+        self.conv3 = ConvRelu(decoder_filters[-2], decoder_filters[-3])  # 128->64
+        self.conv3_2 = ConvRelu(decoder_filters[-3] + encoder_filters[-4], decoder_filters[-3])  # 64+64-->64
+        self.conv4 = ConvRelu(decoder_filters[-3], decoder_filters[-4])  # 64-->32
+
+        self.res = nn.Conv2d(decoder_filters[-4], 5, 1, stride=1, padding=0)
+        self.relu = nn.ReLU(inplace=False)
+
+    def forward1(self, out):
+        dec1 = self.conv1(F.interpolate(out[3], scale_factor = 2))
+        dec1 = self.conv1_2(torch.cat([dec1, out[2]], 1))
+
+
+        dec2 = self.conv2(F.interpolate(dec1, scale_factor=2))
+        dec2 = self.conv2_2(torch.cat([dec2, out[1]], 1))
+
+        dec3 = self.conv3(F.interpolate(dec2, scale_factor=2))
+        dec3 = self.conv3_2(torch.cat([dec3, out[0]], 1))
+
+        dec4 = self.conv4(F.interpolate(dec3, scale_factor=4))
+        dec4 = self.relu(dec4)
+        return dec4
+    def forward(self, out):
+        dec5 = self.forward1(out)
+        return self.res(dec5)
