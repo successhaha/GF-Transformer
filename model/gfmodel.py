@@ -145,3 +145,57 @@ class GFformer_one(nn.Module):
     def forward(self, out):
         dec5 = self.forward1(out)
         return self.res(dec5)
+class CA(nn.Module):
+    def __init__(self,in_ch):
+        super(CA, self).__init__()
+        self.avg_weight = nn.AdaptiveAvgPool2d(1)
+        self.max_weight = nn.AdaptiveMaxPool2d(1)
+        self.fus = nn.Sequential(
+            nn.Conv2d(in_ch, in_ch // 2, 1, 1, 0),
+            nn.ReLU(),
+            nn.Conv2d(in_ch // 2, in_ch, 1, 1, 0),
+        )
+        self.c_mask = nn.Sigmoid()
+    def forward(self, x):
+        avg_map_c = self.avg_weight(x)
+        max_map_c = self.max_weight(x)
+        c_mask = self.c_mask(torch.add(self.fus(avg_map_c), self.fus(max_map_c)))
+        return torch.mul(x, c_mask)
+   class GFM(nn.Module):
+    def __init__(self, in_c):
+        super(GFM, self).__init__()
+        self.conv_n1 = convblock(in_c, in_c//2, 1, 1, 0)
+        self.conv_n2 = convblock(in_c, in_c//2, 1, 1, 0)
+        self.conv_n3 = convblock(in_c, in_c//2, 1, 1, 0)
+        self.conv_rt = convblock(in_c//2, in_c, 1, 1, 0)
+        self.softmax = nn.Softmax(dim=-1)
+        self.gam1 = nn.Parameter(torch.zeros(1))
+        self.gam2 = nn.Parameter(torch.zeros(1))
+
+    def forward(self, pre, post, glo):
+        b, c, h, w = pre.size()
+        pre1 = self.conv_n1(pre)
+        pre2 = pre1.view(b, -1, w * h)
+        glo1 = self.conv_n2(glo).view(b, -1, w * h)
+        post2 = self.conv_n3(post).view(b, -1, w * h)
+
+        post_2 = post2.permute(0, 2, 1)
+        pre_1 = pre2.permute(0, 2, 1)
+        pre_glo = torch.bmm(pre_1, glo1)
+        post_glo = torch.bmm(post_2, glo1)
+        rt_glo = pre_glo + post_glo
+        softmax_rt = self.softmax(rt_glo)
+
+        att_post = torch.bmm(post2, softmax_rt)
+        att_pre = torch.bmm(pre2, softmax_rt)
+        b1, c1, h1, w1 = pre1.size()
+
+        rt_post = att_post.view(b1, c1, h1, w1)
+        rt_pre = att_pre.view(b1, c1, h1, w1)
+
+        out_post = self.conv_rt(rt_post)
+        out_pre = self.conv_rt(rt_pre)
+        out_pre = self.gam1 * out_pre + pre
+        out_post = self.gam2 * out_post + post
+        return out_pre, out_post
+    
