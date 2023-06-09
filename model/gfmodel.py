@@ -252,6 +252,29 @@ class CSGF(nn.Module):
         pre = pre + torch.mul(c_w_pre, torch.mul(s_w_pre, pre))
 
         return pre, post
+def convblock(in_, out_, ks, st, pad):
+    return nn.Sequential(
+        nn.Conv2d(in_, out_, ks, st, pad),
+        nn.BatchNorm2d(out_),
+        nn.ReLU(inplace=True)
+    )
+class GF_module1(nn.Module):
+    def __init__(self, in_c, in_g, h):
+        super(GF_module1, self).__init__()
+        self.down = nn.Conv2d(in_c, 128, 3, 2, 1)
+        self.down_rt = convblock(in_c, 128, 3, 1, 1)
+        self.gfm = GFM(128)
+        self.ca = CA(in_c)
+
+        self.conv_out = convblock(128, in_g, 3, 1, 1)
+    def forward(self, pre, post, cu_g):
+        cu_g = self.down(self.ca(cu_g))
+        pre = self.down_rt(pre)
+        post = self.down_rt(post)
+
+        fus_pre, fus_post = self.gfm(pre, post, cu_g)
+
+        return self.conv_out(fus_pre + fus_post + cu_g)
 class GFformer_two(nn.Module):
     def __init__(self):
         super(GFformer_two, self).__init__()
