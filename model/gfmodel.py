@@ -161,7 +161,7 @@ class CA(nn.Module):
         max_map_c = self.max_weight(x)
         c_mask = self.c_mask(torch.add(self.fus(avg_map_c), self.fus(max_map_c)))
         return torch.mul(x, c_mask)
-   class GFM(nn.Module):
+class GFM(nn.Module):
     def __init__(self, in_c):
         super(GFM, self).__init__()
         self.conv_n1 = convblock(in_c, in_c//2, 1, 1, 0)
@@ -198,4 +198,169 @@ class CA(nn.Module):
         out_pre = self.gam1 * out_pre + pre
         out_post = self.gam2 * out_post + post
         return out_pre, out_post
-    
+class GF_module(nn.Module):
+    def __init__(self, in_c, in_g):
+        super(GF_module, self).__init__()
+        self.conv_fus1 = convblock(2*in_c, in_c, 3, 1, 1)
+        self.conv_fus2 = convblock(2*in_c, in_c, 3, 1, 1)
+        self.conv_out = convblock(in_c, in_g, 3, 1, 1)
+        self.rt_fus = nn.Sequential(
+            nn.Conv2d(in_c, in_c, 1, 1, 0),
+            nn.Sigmoid()
+        )
+        self.ca = CA(64)
+        self.sig = nn.Sigmoid()
+        self.conv_r = nn.Conv2d(64, 1, 3, 1, 1)
+        self.conv_t = nn.Conv2d(64, 1, 3, 1, 1)
+
+    def forward(self, rgb, t):
+        rgb = self.ca(rgb)
+        t   = self.ca(t)
+        fus_t   = self.conv_fus1(torch.cat((torch.add(rgb, torch.mul(rgb, self.rt_fus(t))), t), 1))
+        fus_rgb = self.conv_fus2(torch.cat((torch.add(t, torch.mul(t, self.rt_fus(rgb))), rgb), 1))
+
+        out = self.conv_out(fus_rgb + fus_t)
+        return out
+class CSGF(nn.Module):
+    def __init__(self, in_ch, h, in_glo):
+        super(CSGF, self).__init__()
+        self.down = convblock(in_glo, in_ch, 3, 1, 1)
+        self.gc_shuffle = Gconv_Shuffle(in_ch, 32)
+        self.gc2 = Gconv(32, 2)
+        self.fc = nn.Sequential(
+            nn.Dropout(p=0.5),
+            nn.Linear(2*h*h, 64),
+            nn.ReLU(True),
+            nn.Dropout(p=0.5),
+            nn.Linear(64, 64),
+            nn.ReLU(True),
+            nn.Linear(64, 2)
+        )
+    def forward(self, pre, post, glo):
+        b,c,h,w = pre.size()
+
+        cmf = self.gc_shuffle(self.down(glo))
+        s_w = self.gc2(cmf)
+        s_w_pre = s_w[:, 0, :, :].unsqueeze(1)
+        s_w_post = s_w[:, 1, :, :].unsqueeze(1)
+
+        c_cmf = torch.flatten(s_w, start_dim=1)
+        c_cmf = self.fc(c_cmf)  # 
+        c_w_pre = c_cmf[:, 0].unsqueeze(1).view(b, 1, 1, 1)
+        c_w_post = c_cmf[:, 1].unsqueeze(1).view(b, 1, 1, 1)
+        post = post + torch.mul(c_w_post, (torch.mul(s_w_post, post)))
+        pre = pre + torch.mul(c_w_pre, torch.mul(s_w_pre, pre))
+
+        return pre, post
+class GFformer_two(nn.Module):
+    def __init__(self):
+        super(GFformer_two, self).__init__()
+        model = Encoder()
+        self.gfm1 = GF_module(64, 128)    
+        self.gfm2 = GF_module1(128, 320, 33)
+        self.gfm3 = GF_module1(320, 512, 22)
+        self.gfm4 = GF_module1(512, 512, 11)
+
+        self.CSGF1 = CSGF(64, 128, 128)
+        self.CSGF2 = CSGF(128, 64, 320)
+        self.CSGF3 = CSGF(320, 32, 512)
+        # self.fusion1 = FAModule(64, 64)
+        self.rgb_net = model.encoder
+        self.post_net = model.encoder
+        self.decoder = Decoder_double()
+        decoder_filters = np.asarray([20, 128, 256, 512]) // 2
+        self.res = nn.Conv2d(decoder_filters[-4], 5, 1, stride=1, padding=0)
+    def forward(self, rgb):
+        pre_image = rgb[:, :3, :, :]
+        post_image = rgb[:, 3:, :, :]
+        B = rgb.shape[0]
+        #stage1
+        """
+        /*
+        输入：灾前图像
+        输出：64*128*128
+        */
+        """
+        r1, H1, W1 = self.rgb_net.patch_embed1(pre_image)
+        for i, blk in enumerate(self.rgb_net.block1):
+            r1 = blk(r1, H1, W1)
+        r1 = self.rgb_net.norm1(r1)
+        r1 = r1.reshape(B, H1, W1, -1).permute(0, 3, 1, 2).contiguous()
+        """
+        /*
+        输入：灾后图像
+        输出：64*128*128
+        */
+        """
+        r1_1, H1, W1 = self.rgb_net.patch_embed1(post_image)
+        for i, blk in enumerate(self.rgb_net.block1):
+            r1_1 = blk(r1_1, H1, W1)
+        r1_1 = self.rgb_net.norm1(r1_1)
+        r1_1 = r1_1.reshape(B, H1, W1, -1).permute(0, 3, 1, 2).contiguous()
+        """
+        /*
+        全局引导模块
+        输入：灾前和灾后图像
+        输出：64*128*128
+        */
+        """
+        global_1 = self.gfm1(r1, r1_1)
+
+        # print("stage1 shape", r1.shape, r1_1.shape, global_1.shape)
+        r1, r1_1 = self.CSGF1(r1, r1_1, global_1)
+        # r1_fusion = self.gfm1(r1, global_1)
+        # r1_1_fusion = self.gfm1(r1_1, global_1)
+
+        #stage2
+        r2, H2, W2 = self.rgb_net.patch_embed2(r1)
+        for i, blk in enumerate(self.rgb_net.block2):
+            r2 = blk(r2, H2, W2)
+        r2 = self.rgb_net.norm2(r2)
+        r2 = r2.reshape(B, H2, W2, -1).permute(0, 3, 1, 2).contiguous()
+
+        r2_1, H2, W2 = self.rgb_net.patch_embed2(r1_1)
+        for i, blk in enumerate(self.rgb_net.block2):
+            r2_1 = blk(r2_1, H2, W2)
+        r2_1 = self.rgb_net.norm2(r2_1)
+        r2_1 = r2_1.reshape(B, H2, W2, -1).permute(0, 3, 1, 2).contiguous()
+
+        global_2 = self.gfm2(r2, r2_1, global_1)
+        r2_fusion, r2_1_fusion = self.CSGF2(r2, r2_1, global_2)
+
+        # stage3
+        r3, H3, W3 = self.rgb_net.patch_embed3(r2_fusion)
+        for i, blk in enumerate(self.rgb_net.block3):
+            r3 = blk(r3, H3, W3)
+        r3 = self.rgb_net.norm3(r3)
+        r3 = r3.reshape(B, H3, W3, -1).permute(0, 3, 1, 2).contiguous()
+
+        r3_1, H3, W3 = self.rgb_net.patch_embed3(r2_1_fusion)
+        for i, blk in enumerate(self.rgb_net.block3):
+            r3_1 = blk(r3_1, H3, W3)
+        r3_1 = self.rgb_net.norm3(r3_1)
+        r3_1 = r3_1.reshape(B, H3, W3, -1).permute(0, 3, 1, 2).contiguous()
+
+        global_3 = self.gfm3(r3, r3_1, global_2)
+        r3_fusion, r3_1_fusion = self.CSGF3(r3, r3_1, global_3)
+
+        # stage4
+        r4, H4, W4 = self.rgb_net.patch_embed4(r3_fusion)
+        for i, blk in enumerate(self.rgb_net.block4):
+            r4 = blk(r4, H4, W4)
+        r4 = self.rgb_net.norm4(r4)
+        r4 = r4.reshape(B, H4, W4, -1).permute(0, 3, 1, 2).contiguous()
+
+        r4_1, H4, W4 = self.rgb_net.patch_embed4(r3_1_fusion)
+        for i, blk in enumerate(self.rgb_net.block4):
+            r4_1 = blk(r4_1, H4, W4)
+        r4_1 = self.rgb_net.norm4(r4_1)
+        r4_1 = r4_1.reshape(B, H4, W4, -1).permute(0, 3, 1, 2).contiguous()
+
+
+        out = [r1, r2, r3, r4]
+        out1 = [r1_1, r2_1, r3_1, r4_1]
+        out = self.decoder(out)
+        out_1 = self.decoder(out1)
+
+        dec5 = torch.cat([out, out_1], 1)
+        return self.res(dec5)
