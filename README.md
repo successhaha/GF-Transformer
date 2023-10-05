@@ -1,6 +1,6 @@
 # GF-Former
 Cross-Scale Guided Fusion Transformer for Disaster Assessment Using Satellite Imagery
-
+<https://ieeexplore.ieee.org/document/10197573>
 # Requirements
    Install the necessary package with:
   
