@@ -37,3 +37,5 @@ Augmentations used for training:
  - ElasticTransformation (rare)
 
 Inference goes on full image size (1024, 1024) with 4 simple test-time augmentations (original, filp left-right, flip up-down, rotation to 180).
+
+Contact the author e-mail：xiaowwhit@gmail.com or 2878570391@qq.com
